@@ -1,7 +1,7 @@
 # CMozESP32Board
 Code to support the new range of boards CMoz Designed by Pegg Engineering. 
 
-https://github.com/cmoz/CMozESP32Board/deployments/github-pages
+--> Web page that writes your Glow code for you! https://github.com/cmoz/CMozESP32Board/deployments/github-pages
 
 # ✨ CMozGlow
 
