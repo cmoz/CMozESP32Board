@@ -43,7 +43,10 @@ framework = arduino
 lib_deps  = CMozGlow
 ```
 
-**Arduino IDE** — *Sketch → Include Library → Add .ZIP Library…* and pick `CMozGlow.zip`. Select an **ESP32S3 Dev Module** board.
+**Arduino IDE** — *Sketch → Include Library → Add .ZIP Library…* and pick `CMozGlow.zip`. Then in **Tools**:
+
+* **Board:** ESP32S3 Dev Module
+* **USB CDC On Boot:** Enabled ← don't skip this! It's how `Serial` (and CMozGlow's friendly error messages) reach the Serial Monitor over the USB port.
 
 ### 2. Upload your first sketch
 
@@ -255,6 +258,12 @@ CMozGlow gamma-corrects by default so mixed colours look natural. For raw values
 **First pixel flickers with a long strip.**
 Long wire runs benefit from a 300–500 Ω resistor in the data line and a 500–1000 µF capacitor across the strip's power — both available at TinkerTailor.ca. 😉
 
+**It compiles and runs, but the Serial Monitor shows nothing.**
+In Tools, make sure **Board = ESP32S3 Dev Module** and **USB CDC On Boot = Enabled**, then re-upload. Without CDC enabled the S3 sends Serial to a UART you're not connected to.
+
+**A ctags "cannot open temporary file" error before compiling (Windows).**
+Not your sketch — it's stale files in Windows' temp folder. Close the IDE, press Win + R, type `%TEMP%`, delete what's there, and try again.
+
 **It compiles but `begin()` returns false.**
 Print `errorText()` — it will name the exact problem (bad pin, too many LEDs, out of memory, or the RMT peripheral being used by another library).
 
@@ -270,6 +279,10 @@ CMozGlow drives the LEDs with the ESP32-S3's **RMT peripheral** — a piece of h
 The practical result: on a 200-LED strip, a traditional blocking send freezes your sketch for ~6 ms *every frame*; CMozGlow hands it off in roughly 100 µs. Add AutoPilot and the cost to your `loop()` is zero.
 
 It works on both arduino-esp32 core 2.x and 3.x automatically, and is thread-safe throughout.
+
+---
+
+Made with 💛 in Canada · MIT licensed · Tutorials on the **CMozMaker** YouTube channel · Parts & conductive fabrics at **TinkerTailor.ca**
 
 ---
 
