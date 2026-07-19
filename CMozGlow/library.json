@@ -6,7 +6,11 @@
   "authors": [{ "name": "TinkerTailor.ca (CMozMaker)", "url": "https://tinkertailor.ca" }],
   "license": "MIT",
   "homepage": "https://tinkertailor.ca",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cmoz/CMozESP32Board.git"
+  },
   "frameworks": "arduino",
   "platforms": "espressif32",
-  "export": { "exclude": ["docs/*"] }
+  "export": { "exclude": ["docs/*", "*.zip"] }
 }
