@@ -283,7 +283,3 @@ It works on both arduino-esp32 core 2.x and 3.x automatically, and is thread-saf
 ---
 
 Made with 💛 in Canada · MIT licensed · Tutorials on the **CMozMaker** YouTube channel · Parts & conductive fabrics at **TinkerTailor.ca**
-
----
-
-Made with 💛 in Canada · MIT licensed · Tutorials on the **CMozMaker** YouTube channel · Parts & conductive fabrics at **TinkerTailor.ca**
