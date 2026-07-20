@@ -4,6 +4,7 @@ Code to support the new range of boards CMoz Designed by Pegg Engineering.
 --> Web page that writes your Glow code for you! [https://github.com/cmoz/CMozESP32Board/deployments/github-pages](https://cmoz.github.io/CMozESP32Board/)
 
 # ✨ CMozGlow
+[![PlatformIO Registry](https://badges.registry.platformio.org/packages/cmoz/library/CMozGlow.svg)](https://registry.platformio.org/libraries/cmoz/CMozGlow)
 
 **The friendly WS2812B library for the CMoz ESP32-S3 Mini** — made for wearables and fashion tech by [TinkerTailor.ca](https://tinkertailor.ca) and the CMozMaker channel.
 
