@@ -29,7 +29,7 @@ Because effects never block, your buttons, sensors and Bluetooth code keep runni
 
 ### 1. Install the library
 
-**PlatformIO** — add the library folder to your project's `lib/` directory, or once published:
+**PlatformIO** — available on the [PlatformIO Registry](https://registry.platformio.org/libraries/cmoz/CMozGlow). Just add one line to your `platformio.ini`:
 
 ```ini
 ; platformio.ini
