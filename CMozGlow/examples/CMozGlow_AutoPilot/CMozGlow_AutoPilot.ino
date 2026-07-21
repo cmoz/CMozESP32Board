@@ -25,9 +25,10 @@
 // ══════════════════ CHANGE THESE ══════════════════
 const uint16_t NUM_LEDS = 13;   // onboard + a 12-LED strip on GPIO 3
 const uint8_t  SPEED    = 6;
+const uint8_t  LED_PIN  = 3;    // change for other boards
 // ══════════════════════════════════════════════════
 
-CMozGlow glow(NUM_LEDS);
+CMozGlow glow(NUM_LEDS, LED_PIN);
 
 uint32_t laps = 0, lastReport = 0;
 uint8_t  fx   = CMOZ_FX_AURORA;

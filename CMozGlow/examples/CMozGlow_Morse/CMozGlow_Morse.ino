@@ -14,9 +14,10 @@ const char*    MESSAGE  = "HELLO WORLD";
 const uint16_t NUM_LEDS = 1;      // onboard pixel only — perfect for badges
 const uint8_t  SPEED    = 6;      // higher = faster Morse
 const uint32_t COLOR    = CMozGlow::Color(0, 160, 255);
+const uint8_t  LED_PIN  = 3;      // change for other boards
 // ══════════════════════════════════════════════════
 
-CMozGlow glow(NUM_LEDS);
+CMozGlow glow(NUM_LEDS, LED_PIN);
 
 void setup() {
   Serial.begin(115200);

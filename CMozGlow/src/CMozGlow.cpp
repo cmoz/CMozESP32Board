@@ -110,10 +110,34 @@ CMozGlow::~CMozGlow() { end(); }
 
 // ─────────────────────────── lifecycle ─────────────────────────────
 
+/*
+  Which GPIOs can actually drive LEDs? This differs per chip, so we check
+  against the real target rather than assuming the CMoz board. Pins that
+  are input-only, non-existent, or wired to flash/PSRAM are rejected —
+  those are the ones that silently produce a dark strip and a puzzled maker.
+*/
 bool CMozGlow::pinIsValid(uint8_t pin) const {
-  // ESP32-S3: GPIO 0-21 and 33-48 are usable outputs.
-  // 22-25 don't exist; 26-32 are wired to the flash/PSRAM — never use them.
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+  // ESP32-S3: 0-21 and 33-48. 22-25 don't exist; 26-32 are flash/PSRAM.
   return (pin <= 21) || (pin >= 33 && pin <= 48);
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+  // ESP32-S2: 0-21 and 33-46. 22-25 don't exist; 26-32 are flash/PSRAM.
+  return (pin <= 21) || (pin >= 33 && pin <= 46);
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+  // ESP32-C3: 0-10 and 18-21. 11-17 are flash.
+  return (pin <= 10) || (pin >= 18 && pin <= 21);
+#elif defined(CONFIG_IDF_TARGET_ESP32)
+  // Classic ESP32: 0-19, 21-23, 25-27, 32-33 can output.
+  // 20 and 24 don't exist; 6-11 are flash; 34-39 are INPUT ONLY.
+  if (pin >= 6 && pin <= 11) return false;      // SPI flash — never
+  if (pin == 20 || pin == 24) return false;     // not bonded out
+  if (pin >= 34) return false;                  // input-only pins
+  return (pin <= 19) || (pin >= 21 && pin <= 23)
+      || (pin >= 25 && pin <= 27) || (pin >= 32 && pin <= 33);
+#else
+  // Unknown ESP32 variant — allow anything the core will accept.
+  return pin < 64;
+#endif
 }
 
 bool CMozGlow::begin() {
@@ -212,7 +236,17 @@ const char* CMozGlow::errorText() const {
   switch (_err) {
     case CMOZ_OK:              return "OK — everything is fine";
     case CMOZ_ERR_NOT_BEGUN:   return "begin() was never called (or it failed) — call glow.begin() in setup()";
-    case CMOZ_ERR_BAD_PIN:     return "that GPIO can't be used — pick 0-21 or 33-48 on the ESP32-S3 (the onboard pixel is on 3)";
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+    case CMOZ_ERR_BAD_PIN:     return "that GPIO can't drive LEDs — on the ESP32-S3 use 0-21 or 33-48 (the CMoz onboard pixel is on 3)";
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+    case CMOZ_ERR_BAD_PIN:     return "that GPIO can't drive LEDs — on the ESP32-S2 use 0-21 or 33-46";
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+    case CMOZ_ERR_BAD_PIN:     return "that GPIO can't drive LEDs — on the ESP32-C3 use 0-10 or 18-21";
+#elif defined(CONFIG_IDF_TARGET_ESP32)
+    case CMOZ_ERR_BAD_PIN:     return "that GPIO can't drive LEDs — on the classic ESP32 use 0-5, 12-19, 21-23, 25-27, 32 or 33 (6-11 are the flash pins, 34-39 are input-only)";
+#else
+    case CMOZ_ERR_BAD_PIN:     return "that GPIO can't drive LEDs on this board — check your board's pinout for a usable output pin";
+#endif
     case CMOZ_ERR_BAD_COUNT:   return "LED count must be between 1 and 2000 — remember to include the onboard pixel";
     case CMOZ_ERR_ALLOC:       return "not enough memory for that many LEDs";
     case CMOZ_ERR_RMT:         return "the RMT LED driver failed or timed out — is another library using it?";

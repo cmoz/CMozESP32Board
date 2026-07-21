@@ -1,7 +1,5 @@
 # ✨ CMozGlow
 
-[![PlatformIO Registry](https://badges.registry.platformio.org/packages/cmoz/library/CMozGlow.svg)](https://registry.platformio.org/libraries/cmoz/CMozGlow)
-
 **The friendly WS2812B library for the CMoz ESP32-S3 Mini** — made for wearables and fashion tech by [TinkerTailor.ca](https://tinkertailor.ca) and the CMozMaker channel.
 
 Your CMoz ESP32-S3 Mini already has one addressable LED on board (on **GPIO 3**). This library makes it — and any strip you add — glow beautifully with about five lines of code, and it *talks to you in plain English when something goes wrong*.
@@ -29,7 +27,7 @@ Because effects never block, your buttons, sensors and Bluetooth code keep runni
 
 ### 1. Install the library
 
-**PlatformIO** — available on the [PlatformIO Registry](https://registry.platformio.org/libraries/cmoz/CMozGlow). Just add one line to your `platformio.ini`:
+**PlatformIO** — add the library folder to your project's `lib/` directory, or once published:
 
 ```ini
 ; platformio.ini
@@ -37,10 +35,13 @@ Because effects never block, your buttons, sensors and Bluetooth code keep runni
 platform  = espressif32
 board     = esp32-s3-devkitc-1
 framework = arduino
-lib_deps  = cmoz/CMozGlow@^1.1.0
+lib_deps  = CMozGlow
 ```
 
-**Arduino IDE** — *Sketch → Include Library → Add .ZIP Library…* and pick `CMozGlow.zip`. Select an **ESP32S3 Dev Module** board.
+**Arduino IDE** — *Sketch → Include Library → Add .ZIP Library…* and pick `CMozGlow.zip`. Then in **Tools**:
+
+* **Board:** ESP32S3 Dev Module
+* **USB CDC On Boot:** Enabled ← don't skip this! It's how `Serial` (and CMozGlow's friendly error messages) reach the Serial Monitor over the USB port.
 
 ### 2. Upload your first sketch
 
@@ -54,9 +55,10 @@ const uint8_t  EFFECT   = 8;    // 0-9, table below
 const uint16_t NUM_LEDS = 1;    // onboard only = 1
 const uint8_t  SPEED    = 5;    // 1 dreamy … 10 party
 const uint32_t COLOR    = CMozGlow::Color(255, 42, 120);
+const uint8_t  LED_PIN  = 3;    // GPIO 3 = onboard pixel; change for other boards
 // ══════════════════════════════════
 
-CMozGlow glow(NUM_LEDS);        // GPIO 3 is already the default
+CMozGlow glow(NUM_LEDS, LED_PIN);
 
 void setup() {
   Serial.begin(115200);
@@ -82,6 +84,25 @@ Upload it. The onboard pixel should start dancing the aurora. **Change the `EFFE
 Connect your WS2812B strip's **DIN to GPIO 3**, GND to GND, and 5V to a suitable supply. The onboard pixel becomes **pixel 0** and your strip continues from **pixel 1**.
 
 > 🧵 **Golden rule:** `NUM_LEDS = 1 + your strip length`. A 12-LED strip means `NUM_LEDS = 13`.
+
+### 4. Using a different pin — or a different board
+
+GPIO 3 is only the *default*, because that's where the CMoz board's onboard pixel lives. Any valid output pin works — pass it as the second argument:
+
+```cpp
+CMozGlow glow(NUM_LEDS, 6);     // 20 LEDs on GPIO 6
+```
+
+Every example has a `LED_PIN` constant at the top for exactly this. And CMozGlow isn't CMoz-only — it runs on any ESP32-family board: **ESP32-S3, ESP32-S2, ESP32-C3 and the classic ESP32**. It knows each chip's real pinout and will tell you in plain English if you pick a pin that can't drive LEDs:
+
+| chip | pins that work |
+|------|----------------|
+| ESP32-S3 | 0–21, 33–48 |
+| ESP32-S2 | 0–21, 33–46 |
+| ESP32-C3 | 0–10, 18–21 |
+| classic ESP32 | 0–5, 12–19, 21–23, 25–27, 32, 33 |
+
+On a board *without* an onboard pixel, `NUM_LEDS` is simply your strip length — the golden rule above only applies to boards like the CMoz that have one built in.
 
 ---
 
@@ -238,7 +259,7 @@ CMozGlow::Wheel(0-255);            // spin around the rainbow
 ## 🔧 Troubleshooting
 
 **Nothing lights up.**
-Check `Serial` for a message from `errorText()` first. Then: is the strip's DIN on GPIO 3? Do the strip and board share a GND? Is `NUM_LEDS` at least 1?
+Check `Serial` for a message from `errorText()` first. Then: does `LED_PIN` match the pin your strip's DIN is actually on? Do the strip and board share a GND? Is `NUM_LEDS` at least 1?
 
 **Only the onboard pixel works.**
 `NUM_LEDS` is probably still 1 — remember to add your strip length. Also check the strip's arrow points *away* from the board (data flows in one direction).
@@ -251,6 +272,12 @@ CMozGlow gamma-corrects by default so mixed colours look natural. For raw values
 
 **First pixel flickers with a long strip.**
 Long wire runs benefit from a 300–500 Ω resistor in the data line and a 500–1000 µF capacitor across the strip's power — both available at TinkerTailor.ca. 😉
+
+**It compiles and runs, but the Serial Monitor shows nothing.**
+In Tools, make sure **Board = ESP32S3 Dev Module** and **USB CDC On Boot = Enabled**, then re-upload. Without CDC enabled the S3 sends Serial to a UART you're not connected to.
+
+**A ctags "cannot open temporary file" error before compiling (Windows).**
+Not your sketch — it's stale files in Windows' temp folder. Close the IDE, press Win + R, type `%TEMP%`, delete what's there, and try again.
 
 **It compiles but `begin()` returns false.**
 Print `errorText()` — it will name the exact problem (bad pin, too many LEDs, out of memory, or the RMT peripheral being used by another library).

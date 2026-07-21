@@ -30,9 +30,12 @@ const uint8_t  EFFECT   = 8;    // 0-9, see the table above
 const uint16_t NUM_LEDS = 1;    // onboard only = 1. With a 12-LED strip = 13
 const uint8_t  SPEED    = 5;    // 1 = dreamy ... 10 = party
 const uint32_t COLOR    = CMozGlow::Color(255, 42, 120); // R, G, B
+const uint8_t  LED_PIN  = 3;    // GPIO 3 = the CMoz onboard pixel.
+                                // Using a different board or your own wiring?
+                                // Just change this number.
 // ══════════════════════════════════════════════════
 
-CMozGlow glow(NUM_LEDS);        // GPIO 3 is the default — nothing else needed
+CMozGlow glow(NUM_LEDS, LED_PIN);
 
 void setup() {
   Serial.begin(115200);
