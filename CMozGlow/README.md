@@ -35,7 +35,7 @@ Because effects never block, your buttons, sensors and Bluetooth code keep runni
 platform  = espressif32
 board     = esp32-s3-devkitc-1
 framework = arduino
-lib_deps  = CMozGlow
+lib_deps  = cmoz/CMozGlow @ ^1.2.1
 ```
 
 **Arduino IDE** — *Sketch → Include Library → Add .ZIP Library…* and pick `CMozGlow.zip`. Then in **Tools**:
