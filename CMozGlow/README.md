@@ -11,7 +11,6 @@ At Tinker Tailor, we believe in making wearable tech accessible, fun, and inspir
 
 More projects in my book: https://www.amazon.ca/Ultimate-Informed-Wearable-Technology-hands/dp/1803230592
 
-Questions about this build? Ask in [Discussions](https://github.com/cmoz/YouTube/discussions) and include your board, IDE, and error message.
 --------------------------------------------------------------------
 
 # ✨ CMozGlow
