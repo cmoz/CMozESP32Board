@@ -100,6 +100,12 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--line);border-rad
 #morse-row input[type=text]{flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--chalk);
   border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:13px;min-width:140px}
 #morse-row input:focus{border-color:var(--led);outline:none}
+#board,#pin{background:var(--panel-2);border:1px solid var(--line);color:var(--chalk);
+  border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:13px}
+#board{flex:1;min-width:140px;cursor:pointer}
+#pin{width:82px}
+#board:focus,#pin:focus{border-color:var(--led);outline:none}
+#pin.bad{border-color:var(--bad)}
 .mini-note{font-size:12px;color:var(--thread);margin-top:10px}
 .mini-note code{font-family:var(--mono);color:var(--chalk);font-size:11.5px}
 
@@ -292,6 +298,31 @@ same error messages. Twenty pixels, zero soldering. <span class="eyebrow" style=
       <input type="text" id="morse-in" value="HELLO WORLD" maxlength="63" spellcheck="false"
              aria-label="Morse message — letters, digits and spaces">
     </div>
+
+    <hr class="stitch" style="margin:16px 0 4px">
+    <div class="row">
+      <label for="board">Board</label>
+      <select id="board" aria-label="Your board">
+        <option value="s3cmoz">CMoz ESP32-S3 Mini</option>
+        <option value="s3">ESP32-S3 (generic)</option>
+        <option value="s2">ESP32-S2</option>
+        <option value="c3">ESP32-C3</option>
+        <option value="esp32">ESP32 (classic)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="leds">LED count</label>
+      <input type="range" id="leds" min="1" max="60" value="20">
+      <output id="leds-out">20</output>
+    </div>
+    <div class="row">
+      <label for="pin">Data pin</label>
+      <input type="number" id="pin" min="0" max="48" value="3" aria-label="GPIO data pin">
+      <output id="pin-out">GPIO 3</output>
+    </div>
+    <p class="mini-note" id="pin-warn" style="display:none;color:var(--bad)"></p>
+
+    <hr class="stitch" style="margin:14px 0 4px">
     <div class="row">
       <label for="speed">Speed</label>
       <input type="range" id="speed" min="1" max="10" value="5">
@@ -317,7 +348,7 @@ same error messages. Twenty pixels, zero soldering. <span class="eyebrow" style=
       <label class="toggle"><input type="checkbox" id="auto-tg"> <span><b>AutoPilot</b> — LEDs on their own core</span></label>
       <label class="toggle"><input type="checkbox" id="gamma-tg" checked> <span><b>Gamma</b></span></label>
     </div>
-    <p class="mini-note">Note the golden rule at work: <code>NUM_LEDS = 20</code> here means the onboard pixel <b>plus</b> a 19-LED strip, all on GPIO&nbsp;3.</p>
+    <p class="mini-note" id="golden-note">Golden rule on the CMoz board: <code>NUM_LEDS</code> counts the onboard pixel <b>plus</b> your strip — so 20 means onboard + a 19-LED strip, all on one pin. The strip above is illustrative; your real count, pin and board drive the generated code and the power estimate.</p>
   </div>
 
   <div class="card tele">
@@ -472,7 +503,26 @@ CMozGlow glow(numLeds, pin);       <span class="c">// or any valid ESP32-S3 outp
    Same gamma, same power model, same effect math, same error text.
    The 3D scene is just a display attached to sim.out[].
    ════════════════════════════════════════════════════════════════ */
-const N = 20;
+const N = 20;                 // pixels drawn on screen (visual only)
+
+// Board pin tables — mirror the library's chip-aware pinIsValid().
+// pinOK(pin) returns true if that GPIO can drive LEDs on the chosen chip.
+const BOARDS = {
+  s3cmoz: { label:"CMoz ESP32-S3 Mini",
+    ok:p=>(p<=21)||(p>=33&&p<=48), hint:"ESP32-S3: use 0-21 or 33-48 (onboard pixel is on 3)" },
+  s3: { label:"ESP32-S3 (generic)",
+    ok:p=>(p<=21)||(p>=33&&p<=48), hint:"ESP32-S3: use 0-21 or 33-48" },
+  s2: { label:"ESP32-S2",
+    ok:p=>(p<=21)||(p>=33&&p<=46), hint:"ESP32-S2: use 0-21 or 33-46" },
+  c3: { label:"ESP32-C3",
+    ok:p=>(p<=10)||(p>=18&&p<=21), hint:"ESP32-C3: use 0-10 or 18-21" },
+  esp32: { label:"ESP32 (classic)",
+    ok:p=>{ if(p>=6&&p<=11)return false; if(p===20||p===24)return false; if(p>=34)return false;
+            return (p<=19)||(p>=21&&p<=23)||(p>=25&&p<=27)||(p>=32&&p<=33); },
+    hint:"classic ESP32: use 0-5, 12-19, 21-23, 25-27, 32 or 33 (6-11 are flash, 34-39 input-only)" }
+};
+// Real hardware config the user is building for (drives code + power, NOT the visuals)
+let userLeds = 20, userPin = 3, userBoard = "s3cmoz";
 const now = () => performance.now();
 
 const ERR = { OK:0, INDEX:6, BAD_EFFECT:7, BAD_ARG:8, BAD_PIN:2 };
@@ -542,11 +592,18 @@ class CMozGlowSim {
     const bScale = this.brightness+1;
     let sum=0;
     for(let n=0;n<this.count*3;n++) sum += (this.pix[n]*bScale)>>8;
-    let est = this.count + Math.floor(sum*20/255);
-    this.lastEstmA = est;
+    // Visual frame draws `this.count` pixels, but the user is building for
+    // `userLeds`. Scale the per-pixel draw to the real count so the estimate
+    // and the power gauge reflect their actual hardware, exactly like the
+    // library's model (~20 mA per fully-lit channel + ~1 mA idle per chip).
+    const realN = userLeds;
+    const estReal = realN + Math.floor((sum*20/255) * realN / this.count);
+    this.lastEstmA = estReal;
+    // Dimming for the on-screen strip uses the SAME real numbers, so what you
+    // see dim is what the library would dim on the bench.
     let pScale = 256; this.powerLimited = false;
-    if(this.budgetmA && est>this.budgetmA){
-      const idle=this.count, room=Math.max(0,this.budgetmA-idle), used=Math.max(1,est-idle);
+    if(this.budgetmA && estReal>this.budgetmA){
+      const idle=realN, room=Math.max(0,this.budgetmA-idle), used=Math.max(1,estReal-idle);
       pScale=Math.min(256,Math.floor(room*256/used));
       this.powerLimited=true; this.lastEstmA=this.budgetmA;
     }
@@ -882,6 +939,25 @@ $("color-pick").addEventListener("input",e=>{ setColor(e.target.value);
 
 $("speed").oninput=e=>{ sim.setEffectSpeed(+e.target.value); $("speed-out").value=e.target.value; writeSketch(); };
 $("bright").oninput=e=>{ sim.brightness=+e.target.value; $("bright-out").value=e.target.value; writeSketch(); };
+
+// ── hardware controls: board / LED count / data pin ──
+function validatePin(){
+  const b=BOARDS[userBoard], ok=b.ok(userPin);
+  $("pin").classList.toggle("bad",!ok);
+  const warn=$("pin-warn");
+  if(ok){ warn.style.display="none"; }
+  else { warn.style.display="block";
+    warn.textContent="⚠ that pin can't drive LEDs on this board — "+b.hint; }
+  return ok;
+}
+$("board").onchange=e=>{ userBoard=e.target.value;
+  // CMoz board implies the onboard pixel on GPIO 3; nudge the pin there if switching to it
+  if(userBoard==="s3cmoz" && userPin!==3){ userPin=3; $("pin").value=3; $("pin-out").textContent="GPIO 3"; }
+  validatePin(); writeSketch(); };
+$("leds").oninput=e=>{ userLeds=+e.target.value; $("leds-out").value=e.target.value; writeSketch(); };
+$("pin").oninput=e=>{ userPin=+e.target.value||0; $("pin-out").textContent="GPIO "+userPin;
+  validatePin(); writeSketch(); };
+
 $("budget").oninput=e=>{ sim.budgetmA=+e.target.value;
   $("budget-out").value=+e.target.value ? e.target.value+" mA" : "off";
   $("gauge-max").textContent=+e.target.value ? e.target.value+" mA budget" : "no budget set";
@@ -949,14 +1025,22 @@ function writeSketch(){
   const [r,g,b]=sim.rgb();
   const fxConst=["CMOZ_FX_SOLID","CMOZ_FX_SEQUIN","CMOZ_FX_CATWALK","CMOZ_FX_LOOM","CMOZ_FX_HEARTBEAT",
     "CMOZ_FX_FIREFLY","CMOZ_FX_SILK","CMOZ_FX_EMBER","CMOZ_FX_AURORA","CMOZ_FX_MORSE"][sim.fx];
+  const onboard = (userBoard==="s3cmoz");
+  const ledsComment = onboard
+    ? `  <span class="c">// 1 onboard + ${userLeds-1}-LED strip, all on GPIO ${userPin}</span>`
+    : `  <span class="c">// total pixels on GPIO ${userPin}</span>`;
+  const pinComment = onboard
+    ? `  <span class="c">// GPIO 3 = the CMoz onboard pixel</span>`
+    : `  <span class="c">// ${BOARDS[userBoard].label} data pin</span>`;
   const lines=[
 `<span class="c">// Generated by the CMozGlow simulator — flash it, get exactly this.</span>`,
 `<span class="k">#include</span> <span class="s">&lt;CMozGlow.h&gt;</span>`,``,
 `<span class="k">const uint8_t</span>  EFFECT   = <span class="n">${sim.fx}</span>;   <span class="c">// ${FX_META[sim.fx][0]}</span>`,
-`<span class="k">const uint16_t</span> NUM_LEDS = <span class="n">${N}</span>;  <span class="c">// onboard + 19-LED strip on GPIO 3</span>`,
+`<span class="k">const uint16_t</span> NUM_LEDS = <span class="n">${userLeds}</span>;${ledsComment}`,
+`<span class="k">const uint8_t</span>  LED_PIN  = <span class="n">${userPin}</span>;${pinComment}`,
 `<span class="k">const uint8_t</span>  SPEED    = <span class="n">${sim.speed}</span>;`,
 `<span class="k">const uint32_t</span> COLOR    = <span class="f">CMozGlow::Color</span>(<span class="n">${r}</span>, <span class="n">${g}</span>, <span class="n">${b}</span>);`,``,
-`CMozGlow glow(NUM_LEDS);`,``,
+`CMozGlow glow(NUM_LEDS, LED_PIN);`,``,
 `<span class="k">void</span> <span class="f">setup</span>() {`,
 `  Serial.begin(<span class="n">115200</span>);`,
 `  <span class="k">if</span> (!glow.<span class="f">begin</span>()) { Serial.println(glow.<span class="f">errorText</span>()); <span class="k">while</span>(<span class="n">1</span>) delay(<span class="n">1000</span>); }`,
@@ -987,6 +1071,7 @@ document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
 
 /* boot */
 applyEffect(8);
+validatePin();
 writeSketch();
 render();
 </script>
