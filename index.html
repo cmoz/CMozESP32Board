@@ -703,4 +703,495 @@ class CMozGlowSim {
     const unit=60+(10-this.speed)*30;
     let c=this.mMsg[this.mChar];
     if(c===undefined){ this.fill(0); this.mOn=false; this.mChar=0; this.mElem=0;
-      this.mNextAt=t+unit*10; return;
+      this.mNextAt=t+unit*10; return; }
+    c=c.toUpperCase();
+    if(c===" "){ this.fill(0); this.mChar++; this.mElem=0; this.mNextAt=t+unit*7; return; }
+    const pat=c>="A"?MORSE[c.charCodeAt(0)-65]:MORSE[26+(c.charCodeAt(0)-48)];
+    if(!this.mOn){ this.fill(this.fxColor); this.mOn=true;
+      this.mNextAt=t+unit*(pat[this.mElem]==="-"?3:1); }
+    else{ this.fill(0); this.mOn=false; this.mElem++;
+      if(pat[this.mElem]===undefined){ this.mElem=0; this.mChar++; this.mNextAt=t+unit*3; }
+      else this.mNextAt=t+unit; } }
+
+  // Flicker — jack-o'-lantern flame; whole strip flickers together, warm orange.
+  fxFlicker(){
+    let env=this.heat[0]||200;
+    env+=((Math.random()*53)|0)-26;
+    if(env<120)env=120; if(env>255)env=255;
+    this.heat[0]=env;
+    for(let i=0;i<this.count;i++){
+      let b=env-((Math.random()*34)|0); if(b<90)b=90;
+      const g=(b*100)>>8, bl=b>210?((b-210)/3)|0:0;
+      this.setPixel(i,b,g,bl); } }
+
+  // Phantom — cold eerie breath drifting green<->violet.
+  fxPhantom(){ const t=(now()-this.t0)*0.0012;
+    for(let i=0;i<this.count;i++){
+      const wave=Math.sin(i*0.22+t*1.3)*0.5+0.5;
+      const breath=0.35+0.4*(Math.sin(t*2.1-i*0.05)*0.5+0.5);
+      const r=((40+(150-40)*wave)*breath)|0;
+      const g=((255+(20-255)*wave)*breath)|0;
+      const b=((60+(210-60)*wave)*breath)|0;
+      this.setPixel(i,r,g,b); } }
+
+  // Twinkle — fairy lights; warm base + random sparkles fading out.
+  fxTwinkle(){ const [fr,fg,fb]=this.rgb();
+    const sparks=1+Math.floor(this.count/12);
+    for(let s=0;s<sparks;s++) if(Math.random()*100<30) this.heat[(Math.random()*this.count)|0]=255;
+    for(let i=0;i<this.count;i++){
+      this.heat[i]=this.heat[i]>6?this.heat[i]-6:0;
+      const v=this.heat[i];
+      const r=Math.min(255,14+((fr*v)/255|0));
+      const g=Math.min(255,9 +((fg*v)/255|0));
+      const b=Math.min(255,3 +((fb*v)/255|0));
+      this.setPixel(i,r,g,b); } }
+
+  // Candy Cane — red & white barber stripes chasing along the strip.
+  fxCandycane(){ const stripe=3, shift=this.step;
+    for(let i=0;i<this.count;i++){
+      const white=(((i+shift)/stripe|0)&1);
+      if(white) this.setPixel(i,255,255,255);
+      else      this.setPixel(i,220,0,20); } }
+}
+const sim = new CMozGlowSim(N);
+
+/* ════════════════════════════════════════════════════════════════
+   PART 2 — the view layer. Preferred: a three.js atelier (fabric
+   ribbon, 20 LEDs, glow halos, roving colour lights, camera drift).
+   Fallback: a 2D glow canvas, so the simulator, telemetry and live
+   sketch keep working even if WebGL or the CDN is unavailable.
+   Both read the same source of truth: sim.out[].
+   ════════════════════════════════════════════════════════════════ */
+const canvas = document.getElementById("stage");
+const pix0Label = document.getElementById("pix0-label");
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+let px=0, py=0, dragging=false, lastPX=0;
+canvas.addEventListener("pointermove", e=>{
+  const r=canvas.getBoundingClientRect();
+  const nx=(e.clientX-r.left)/r.width-0.5, ny=(e.clientY-r.top)/r.height-0.5;
+  if(dragging){ px += (e.clientX-lastPX)*0.01; lastPX=e.clientX; }
+  else { px = px*0.9 + nx*0.6*0.1; }
+  py = py*0.9 + ny*0.1;
+});
+canvas.addEventListener("pointerdown", e=>{dragging=true; lastPX=e.clientX; canvas.style.cursor="grabbing";});
+addEventListener("pointerup", ()=>{dragging=false; canvas.style.cursor="grab";});
+
+const STRIP_LEN=17.2, X0=-STRIP_LEN/2;
+const ledX = i => X0 + (i/(N-1))*STRIP_LEN;
+const ledY = x => 0.55 + 0.22*Math.sin(x*0.42);
+
+function build3D(){
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:false});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(0x0E0B14);
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x0E0B14, 16, 34);
+  const camera = new THREE.PerspectiveCamera(38, 2, 0.1, 100);
+
+  /* table */
+  const table = new THREE.Mesh(
+    new THREE.PlaneGeometry(80,50),
+    new THREE.MeshStandardMaterial({color:0x141021, roughness:0.35, metalness:0.55}));
+  table.rotation.x = -Math.PI/2; scene.add(table);
+
+  /* fabric ribbon with woven texture + stitched edges (canvas texture) */
+  function fabricTexture(){
+    const c=document.createElement("canvas"); c.width=512; c.height=128;
+    const g=c.getContext("2d");
+    g.fillStyle="#241a33"; g.fillRect(0,0,512,128);
+    for(let i=0;i<2600;i++){ g.fillStyle=`rgba(255,255,255,${Math.random()*0.05})`;
+      g.fillRect(Math.random()*512, Math.random()*128, 2, 1); }
+    for(let i=0;i<1400;i++){ g.fillStyle=`rgba(0,0,0,${Math.random()*0.18})`;
+      g.fillRect(Math.random()*512, Math.random()*128, 1, 2); }
+    g.strokeStyle="rgba(214,204,235,0.5)"; g.lineWidth=3; g.setLineDash([14,10]);
+    g.beginPath(); g.moveTo(0,12); g.lineTo(512,12); g.stroke();      // stitched edges —
+    g.beginPath(); g.moveTo(0,116); g.lineTo(512,116); g.stroke();    // the thread motif
+    const t=new THREE.CanvasTexture(c); t.wrapS=THREE.RepeatWrapping; t.repeat.set(3,1); return t;
+  }
+  const ribbonGeo = new THREE.BoxGeometry(STRIP_LEN+3.4, 0.14, 1.7, 64, 1, 1);
+  { const pos=ribbonGeo.attributes.position;                 // gentle drape
+    for(let i=0;i<pos.count;i++){ const x=pos.getX(i);
+      pos.setY(i, pos.getY(i)+0.22*Math.sin(x*0.42)+0.34); } pos.needsUpdate=true;
+    ribbonGeo.computeVertexNormals(); }
+  scene.add(new THREE.Mesh(ribbonGeo,
+    new THREE.MeshStandardMaterial({map:fabricTexture(), roughness:0.95, metalness:0})));
+
+  /* onboard PCB under pixel 0 */
+  const pcb = new THREE.Mesh(new THREE.BoxGeometry(1.7,0.16,1.5),
+    new THREE.MeshStandardMaterial({color:0x231043, roughness:0.5, metalness:0.3}));
+  pcb.position.set(ledX(0), ledY(ledX(0))+0.05, 0); scene.add(pcb);
+
+  /* glow sprite texture */
+  function haloTexture(){
+    const c=document.createElement("canvas"); c.width=c.height=128;
+    const g=c.getContext("2d");
+    const r=g.createRadialGradient(64,64,2,64,64,64);
+    r.addColorStop(0,"rgba(255,255,255,1)"); r.addColorStop(0.25,"rgba(255,255,255,0.55)");
+    r.addColorStop(0.6,"rgba(255,255,255,0.12)"); r.addColorStop(1,"rgba(255,255,255,0)");
+    g.fillStyle=r; g.fillRect(0,0,128,128);
+    return new THREE.CanvasTexture(c);
+  }
+  const haloTex = haloTexture();
+  const pkgMat = new THREE.MeshStandardMaterial({color:0xE8E4EF, roughness:0.35, metalness:0.15});
+  const leds=[];
+  for(let i=0;i<N;i++){
+    const x=ledX(i), y=ledY(x)+0.16;
+    const pkg=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.12,0.44), pkgMat);
+    pkg.position.set(x,y,0); scene.add(pkg);
+    const domeMat=new THREE.MeshBasicMaterial({color:0x000000});
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(0.155,18,14), domeMat);
+    dome.position.set(x,y+0.09,0); scene.add(dome);
+    const sprMat=new THREE.SpriteMaterial({map:haloTex, color:0x000000,
+      blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.95});
+    const halo=new THREE.Sprite(sprMat); halo.position.set(x,y+0.12,0.02); halo.scale.setScalar(0.001);
+    scene.add(halo);
+    leds.push({domeMat, halo});
+  }
+
+  /* roving lights: 4 point lights coloured by their local LEDs → fabric & table respond */
+  scene.add(new THREE.AmbientLight(0x2A2140, 1.1));
+  const key=new THREE.DirectionalLight(0x9C90C8, 0.25); key.position.set(-4,8,6); scene.add(key);
+  const zone=[];
+  for(let z=0;z<4;z++){ const L=new THREE.PointLight(0x000000, 0, 11, 2);
+    L.position.set(X0+STRIP_LEN*(z+0.5)/4, 1.6, 0.7); scene.add(L); zone.push(L); }
+
+  const v3=new THREE.Vector3();
+  function resize(){
+    const w=canvas.clientWidth, h=canvas.clientHeight;
+    if(canvas.width!==Math.floor(w*renderer.getPixelRatio())){ renderer.setSize(w,h,false);
+      camera.aspect=w/h; camera.updateProjectionMatrix(); }
+  }
+
+  return { frame(){
+    resize();
+    let ar=0, ag=0, ab=0;
+    const zc=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+    for(let i=0;i<N;i++){
+      const r=sim.out[i*3], g=sim.out[i*3+1], b=sim.out[i*3+2];
+      const {domeMat, halo}=leds[i];
+      domeMat.color.setRGB(r,g,b);
+      halo.material.color.setRGB(r,g,b);
+      const lum=Math.max(r,g,b);
+      halo.scale.setScalar(0.35+lum*3.1);
+      ar+=r; ag+=g; ab+=b;
+      const z=Math.min(3,(i/N*4)|0); zc[z][0]+=r; zc[z][1]+=g; zc[z][2]+=b; zc[z][3]++;
+    }
+    zone.forEach((L,z)=>{ const [r,g,b,n]=zc[z];
+      L.color.setRGB(r/n,g/n,b/n); L.intensity=Math.min(2.4,(r+g+b)/n*2.6); });
+
+    const t=now()*0.001;
+    const sway=reduceMotion?0:Math.sin(t*0.16)*0.7;
+    camera.position.set(sway+px*3.2, 5.4-py*1.6, 10.4);
+    camera.lookAt(px*1.4, 0.55, 0);
+
+    v3.set(ledX(0), ledY(ledX(0))+0.75, 0).project(camera);
+    pix0Label.style.left=((v3.x*0.5+0.5)*canvas.clientWidth)+"px";
+    pix0Label.style.top =((-v3.y*0.5+0.5)*canvas.clientHeight+8)+"px";
+    pix0Label.style.opacity = v3.z<1 ? 1 : 0;
+
+    renderer.render(scene,camera);
+    return [ar/N, ag/N, ab/N];
+  }};
+}
+
+function build2D(){
+  const ctx = canvas.getContext("2d");
+  return { frame(){
+    const dpr=Math.min(devicePixelRatio,2);
+    const w=canvas.clientWidth, h=canvas.clientHeight;
+    if(canvas.width!==Math.floor(w*dpr)){ canvas.width=w*dpr; canvas.height=h*dpr; }
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.fillStyle="#0E0B14"; ctx.fillRect(0,0,w,h);
+    const y0=h*0.55;
+    ctx.fillStyle="#241a33"; ctx.fillRect(w*0.06,y0-14,w*0.88,28);       // ribbon
+    ctx.strokeStyle="rgba(214,204,235,.5)"; ctx.setLineDash([10,8]); ctx.lineWidth=2;
+    ctx.strokeRect(w*0.06+3,y0-11,w*0.88-6,22); ctx.setLineDash([]);     // stitches
+    ctx.fillStyle="#231043"; ctx.fillRect(w*0.08-22,y0-20,44,40);        // pcb
+    let ar=0, ag=0, ab=0;
+    for(let i=0;i<N;i++){
+      const r=sim.out[i*3], g=sim.out[i*3+1], b=sim.out[i*3+2];
+      ar+=r; ag+=g; ab+=b;
+      const x=w*0.08+(i/(N-1))*w*0.84;
+      const lum=Math.max(r,g,b);
+      const R=(r*255)|0, G=(g*255)|0, B=(b*255)|0;
+      const rad=10+lum*28;
+      const grad=ctx.createRadialGradient(x,y0,1,x,y0,rad);
+      grad.addColorStop(0,`rgba(255,255,255,${0.9*lum})`);
+      grad.addColorStop(0.3,`rgba(${R},${G},${B},${0.85*lum})`);
+      grad.addColorStop(1,`rgba(${R},${G},${B},0)`);
+      ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(x,y0,rad,0,6.2832); ctx.fill();
+      ctx.fillStyle=`rgb(${Math.max(R,26)},${Math.max(G,22)},${Math.max(B,34)})`;
+      ctx.beginPath(); ctx.arc(x,y0,4.2,0,6.2832); ctx.fill();
+    }
+    pix0Label.style.left=(w*0.08)+"px";
+    pix0Label.style.top =(y0+28)+"px";
+    pix0Label.style.opacity=1;
+    return [ar/N, ag/N, ab/N];
+  }};
+}
+
+let view=null;
+if(typeof THREE!=="undefined"){ try{ view=build3D(); }catch(e){ view=null; } }
+if(!view) view=build2D();
+
+/* ════════════════════════════════════════════════════════════════
+   PART 3 — the signature: the page is lit by the LEDs.
+   Average frame colour → CSS custom properties, every frame.
+   ════════════════════════════════════════════════════════════════ */
+const rootStyle=document.documentElement.style;
+let fpsCount=0, fpsLast=now(), fpsVal=0;
+
+function render(){
+  requestAnimationFrame(render);
+  if(document.hidden) return;
+  sim.update();
+  const [ar,ag,ab]=view.frame();
+
+  const boost=1/Math.max(0.22,Math.max(ar,ag,ab));   // keep the accent readable
+  const R=Math.min(255,ar*boost*255)|0, G=Math.min(255,ag*boost*255)|0, B=Math.min(255,ab*boost*255)|0;
+  rootStyle.setProperty("--led",`rgb(${R},${G},${B})`);
+  rootStyle.setProperty("--led-soft",`rgba(${R},${G},${B},0.14)`);
+
+  fpsCount++;
+  if(now()-fpsLast>1000){ fpsVal=fpsCount; fpsCount=0; fpsLast=now(); tickSecond(); }
+  updateTelemetry();
+}
+
+/* ════════════════════════════════════════════════════════════════
+   PART 4 — UI wiring. Every control maps to a library call by name.
+   ════════════════════════════════════════════════════════════════ */
+const $=id=>document.getElementById(id);
+const SWATCHES=["#FF2A78","#FFB300","#00C8A0","#0A90FF","#9B5CFF","#FFFFFF"];
+const chipsEl=$("fx-chips"), galleryEl=$("fx-gallery");
+const FX_GRAD=["linear-gradient(90deg,#FF2A78,#FF2A78)",
+ "linear-gradient(90deg,#332,#fff 30%,#332 34%,#332 60%,#fff 64%,#332)",
+ "linear-gradient(90deg,transparent,#FF2A78 45%,#fff 50%,#FF2A78 55%,transparent)",
+ "repeating-linear-gradient(90deg,#FF2A78 0 14px,#00C8A0 14px 28px)",
+ "radial-gradient(circle at 50% 50%,#FF2A78,#400 70%)",
+ "radial-gradient(circle at 20% 50%,#CFFF6A 4%,#111 22%),radial-gradient(circle at 70% 50%,#CFFF6A 3%,transparent 20%)",
+ "linear-gradient(90deg,#802,#FF2A78,#802,#FF2A78,#802)",
+ "linear-gradient(90deg,#FF7A00,#FFC94A,#FF5500,#FFB347)",
+ "linear-gradient(90deg,#0d3,#0cc,#63f,#0d3)",
+ "repeating-linear-gradient(90deg,#0A90FF 0 10px,#111 10px 16px,#0A90FF 16px 40px,#111 40px 52px)",
+ "linear-gradient(90deg,#FF7A00,#FFB300,#FF5500,#FFA030,#FF7A00)",
+ "linear-gradient(90deg,#28D96A,#7A3CFF,#28D96A,#9B5CFF)",
+ "radial-gradient(circle at 25% 50%,#FFE9A8 5%,#201 24%),radial-gradient(circle at 68% 50%,#FFF 4%,transparent 22%)",
+ "repeating-linear-gradient(90deg,#DC0014 0 12px,#fff 12px 24px)"];
+
+FX_META.forEach(([name,desc],i)=>{
+  const c=document.createElement("button"); c.className="chip"; c.type="button";
+  c.innerHTML=`<span class="n">${i}</span>${name}`;
+  c.setAttribute("aria-pressed", i===sim.fx);
+  c.onclick=()=>applyEffect(i);
+  chipsEl.appendChild(c);
+  const card=document.createElement("button"); card.className="fx-card"; card.type="button";
+  card.innerHTML=`<div class="strip" style="background:${FX_GRAD[i]}"></div>
+    <h4><span>${String(i).padStart(2,"0")}</span>${name}</h4><p>${desc}</p><span class="try">run it ↑</span>`;
+  card.onclick=()=>{applyEffect(i); $("stage-wrap").scrollIntoView({behavior:"smooth",block:"center"});};
+  galleryEl.appendChild(card);
+});
+function applyEffect(i){
+  sim.setEffect(i);
+  chipsEl.querySelectorAll(".chip").forEach((c,k)=>c.setAttribute("aria-pressed",k===i));
+  $("hud-fx").textContent=FX_META[i][0];
+  $("morse-row").style.display = i===9 ? "flex" : "none";
+  writeSketch();
+}
+SWATCHES.forEach((hex,k)=>{
+  const b=document.createElement("button"); b.className="sw"; b.type="button";
+  b.style.background=hex; b.setAttribute("aria-label","colour "+hex);
+  b.setAttribute("aria-pressed", k===0);
+  b.onclick=()=>{ setColor(hex);
+    document.querySelectorAll(".sw").forEach(s=>s.setAttribute("aria-pressed",s===b)); };
+  $("swatches").appendChild(b);
+});
+function setColor(hex){ sim.fxColor=parseInt(hex.slice(1),16); $("color-pick").value=hex; writeSketch(); }
+$("color-pick").addEventListener("input",e=>{ setColor(e.target.value);
+  document.querySelectorAll(".sw").forEach(s=>s.setAttribute("aria-pressed",false)); });
+
+$("speed").oninput=e=>{ sim.setEffectSpeed(+e.target.value); $("speed-out").value=e.target.value; writeSketch(); };
+$("bright").oninput=e=>{ sim.brightness=+e.target.value; $("bright-out").value=e.target.value; writeSketch(); };
+
+// ── hardware controls: board / LED count / data pin ──
+function validatePin(){
+  const b=BOARDS[userBoard], ok=b.ok(userPin);
+  $("pin").classList.toggle("bad",!ok);
+  const warn=$("pin-warn");
+  if(ok){ warn.style.display="none"; }
+  else { warn.style.display="block";
+    warn.textContent="⚠ that pin can't drive LEDs on this board — "+b.hint; }
+  return ok;
+}
+$("board").onchange=e=>{ userBoard=e.target.value;
+  // CMoz board implies the onboard pixel on GPIO 3; nudge the pin there if switching to it
+  if(userBoard==="s3cmoz" && userPin!==3){ userPin=3; $("pin").value=3; $("pin-out").textContent="GPIO 3"; }
+  validatePin(); writeSketch(); };
+$("leds").oninput=e=>{ userLeds=+e.target.value; $("leds-out").value=e.target.value; writeSketch(); };
+$("pin").oninput=e=>{ userPin=+e.target.value||0; $("pin-out").textContent="GPIO "+userPin;
+  validatePin(); writeSketch(); };
+
+$("budget").oninput=e=>{ sim.budgetmA=+e.target.value;
+  $("budget-out").value=+e.target.value ? e.target.value+" mA" : "off";
+  $("gauge-max").textContent=+e.target.value ? e.target.value+" mA budget" : "no budget set";
+  writeSketch(); };
+$("gamma-tg").onchange=e=>{ sim.gammaOn=e.target.checked; };
+$("status-tg").onchange=e=>{ sim.statusOn=e.target.checked; writeSketch(); };
+$("auto-tg").onchange=e=>{ autopilot=e.target.checked;
+  $("autopilot-tag").style.display=autopilot?"inline-block":"none";
+  $("laps-note").textContent=autopilot
+    ? "(AutoPilot — LEDs render on core 0, loop() is all yours)"
+    : "(manual mode — your loop() shares time with the LEDs)";
+  writeSketch(); };
+$("morse-in").addEventListener("input",e=>{
+  const ok=sim.setMorseMessage(e.target.value);
+  e.target.style.borderColor = ok ? "var(--line)" : "var(--bad)";
+  if(!ok) logConsole(`setMorseMessage("${e.target.value}")`, sim.errorText());
+  writeSketch(); });
+
+/* AutoPilot laps demo — same numbers the real example prints */
+let autopilot=false;
+function tickSecond(){
+  const laps = autopilot
+    ? (420000+Math.random()*60000)|0
+    : (52000+Math.random()*9000)|0;
+  $("laps").textContent = laps.toLocaleString();
+}
+
+/* telemetry */
+function updateTelemetry(){
+  $("ma-out").innerHTML = sim.lastEstmA+" <small>mA</small>";
+  $("iv-out").innerHTML = sim.frameInterval()+" <small>ms</small>";
+  $("fps-out").textContent = fpsVal||"—";
+  const st=$("st-out");
+  if(sim.err===ERR.OK){ st.textContent="OK"; st.style.color="var(--ok)"; }
+  else { st.textContent="ERR — "+Object.keys(ERR).find(k=>ERR[k]===sim.err); st.style.color="var(--bad)"; }
+  const cap = sim.budgetmA || 1500;
+  const pct = Math.min(100, sim.lastEstmA/cap*100);
+  $("gauge-fill").style.width=pct+"%";
+  $("gauge").classList.toggle("hot", sim.powerLimited);
+  $("limited-tag").style.display = sim.powerLimited ? "inline-block" : "none";
+}
+
+/* error playground — the library's exact strings */
+const consoleEl=$("console");
+function logConsole(call, answer, good){
+  const d=document.createElement("div"); d.className="line"+(good?" good":"");
+  d.innerHTML=`<span>&gt; ${call}</span><br><b>${good?"✓":"✗"}</b> ${answer}`;
+  consoleEl.prepend(d);
+  while(consoleEl.children.length>7) consoleEl.lastChild.remove();
+}
+document.querySelectorAll(".err-btn").forEach(b=>b.onclick=()=>{
+  const kind=b.dataset.err;
+  if(kind==="index"){ sim.setPixel(999,255,0,0); logConsole("glow.setPixel(999, 255,0,0)", sim.errorText()); }
+  if(kind==="effect"){ sim.setEffect(42); logConsole("glow.setEffect(42)", sim.errorText()); }
+  if(kind==="morse"){ sim.setMorseMessage("HI!"); logConsole('glow.setMorseMessage("HI!")', sim.errorText()); }
+  if(kind==="pin"){ sim.err=ERR.BAD_PIN; logConsole("CMozGlow bad(20, 27); bad.begin()", ERR_TEXT[2]); }
+  if(kind==="clear"){ sim.clearError(); logConsole("glow.clearError()", "OK — everything is fine", true); }
+  if(kind!=="clear" && !sim.statusOn){
+    logConsole("hint","turn on the status pixel above to see pixel 0 go red", true); }
+});
+
+/* live sketch generator */
+function hex6(c){ return "0x"+c.toString(16).toUpperCase().padStart(6,"0"); }
+function writeSketch(){
+  const [r,g,b]=sim.rgb();
+  const fxConst=["CMOZ_FX_SOLID","CMOZ_FX_SEQUIN","CMOZ_FX_CATWALK","CMOZ_FX_LOOM","CMOZ_FX_HEARTBEAT",
+    "CMOZ_FX_FIREFLY","CMOZ_FX_SILK","CMOZ_FX_EMBER","CMOZ_FX_AURORA","CMOZ_FX_MORSE"][sim.fx];
+  const onboard = (userBoard==="s3cmoz");
+  const ledsComment = onboard
+    ? `  <span class="c">// 1 onboard + ${userLeds-1}-LED strip, all on GPIO ${userPin}</span>`
+    : `  <span class="c">// total pixels on GPIO ${userPin}</span>`;
+  const pinComment = onboard
+    ? `  <span class="c">// GPIO 3 = the CMoz onboard pixel</span>`
+    : `  <span class="c">// ${BOARDS[userBoard].label} data pin</span>`;
+  const lines=[
+`<span class="c">// Generated by the CMozGlow simulator — flash it, get exactly this.</span>`,
+`<span class="k">#include</span> <span class="s">&lt;CMozGlow.h&gt;</span>`,``,
+`<span class="k">const uint8_t</span>  EFFECT   = <span class="n">${sim.fx}</span>;   <span class="c">// ${FX_META[sim.fx][0]}</span>`,
+`<span class="k">const uint16_t</span> NUM_LEDS = <span class="n">${userLeds}</span>;${ledsComment}`,
+`<span class="k">const uint8_t</span>  LED_PIN  = <span class="n">${userPin}</span>;${pinComment}`,
+`<span class="k">const uint8_t</span>  SPEED    = <span class="n">${sim.speed}</span>;`,
+`<span class="k">const uint32_t</span> COLOR    = <span class="f">CMozGlow::Color</span>(<span class="n">${r}</span>, <span class="n">${g}</span>, <span class="n">${b}</span>);`,``,
+`CMozGlow glow(NUM_LEDS, LED_PIN);`,``,
+`<span class="k">void</span> <span class="f">setup</span>() {`,
+`  Serial.begin(<span class="n">115200</span>);`,
+`  <span class="k">if</span> (!glow.<span class="f">begin</span>()) { Serial.println(glow.<span class="f">errorText</span>()); <span class="k">while</span>(<span class="n">1</span>) delay(<span class="n">1000</span>); }`,
+`  glow.<span class="f">setPowerBudgetmA</span>(<span class="n">${sim.budgetmA}</span>);${sim.budgetmA===0?'  <span class="c">// unlimited — be careful!</span>':""}`,
+`  glow.<span class="f">setBrightness</span>(<span class="n">${sim.brightness}</span>);`];
+  if(sim.statusOn) lines.push(`  glow.<span class="f">statusPixel</span>(<span class="k">true</span>);`);
+  lines.push(`  glow.<span class="f">setEffect</span>(EFFECT);`,
+    `  glow.<span class="f">setEffectColor</span>(COLOR);`,
+    `  glow.<span class="f">setEffectSpeed</span>(SPEED);`);
+  if(sim.fx===9) lines.push(`  glow.<span class="f">setMorseMessage</span>(<span class="s">"${sim.mMsg}"</span>);`);
+  if(autopilot) lines.push(`  glow.<span class="f">autoUpdate</span>(<span class="k">true</span>);   <span class="c">// ✈ LEDs move to core 0</span>`);
+  lines.push(`}`,``,`<span class="k">void</span> <span class="f">loop</span>() {`,
+    autopilot?`  <span class="c">// nothing! AutoPilot renders on core 0 — loop() is all yours</span>`
+             :`  glow.<span class="f">update</span>();`, `}`);
+  $("sketch").innerHTML=lines.join("\n");
+}
+$("copy-sketch").onclick=()=>{
+  navigator.clipboard.writeText($("sketch").innerText).then(()=>{
+    const t=$("toast"); t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1600);
+  }).catch(()=>{});
+};
+
+/* scroll reveal */
+const io=new IntersectionObserver(es=>es.forEach(e=>{
+  if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); }
+}),{threshold:0.12});
+document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+
+/* ── seasonal themes ── palette comes from CSS; here we set the themed
+   default effect, colour and copy. The live --led accent follows the effect. */
+const THEMES = {
+  default: { fx:8, color:0xFF2A78, budget:450, bright:180,
+    tagline:`The friendly WS2812B library for the <b>CMoz ESP32-S3 Mini</b> — running live below.
+      This page executes the library's <b>actual math</b>: same gamma curve, same power budgeting,
+      same effects, same error messages. Twenty pixels, zero soldering.
+      <span class="eyebrow" style="display:block;margin-top:6px">TinkerTailor.ca · CMozMaker · made in Canada</span>` },
+  halloween: { fx:10, color:0xFF7A18, budget:450, bright:190,
+    tagline:`🎃 <b>Light up your haunt.</b> The CMozGlow effects simulator, dressed for the season —
+      flicker, phantom glow and a little mischief across twenty pixels. Same real library code
+      underneath, so what you build here runs on your costume, prop or porch.
+      <span class="eyebrow" style="display:block;margin-top:6px">TinkerTailor.ca · CMozMaker · spooky things, made in Canada</span>` },
+  christmas: { fx:12, color:0xFFB43C, budget:600, bright:190,
+    tagline:`🎄 <b>Deck the strip.</b> The CMozGlow effects simulator in its festive sweater —
+      twinkle, candy cane and warm gold, running the library's real code. No soldering,
+      no tangled lights, no arguing with the one dead bulb.
+      <span class="eyebrow" style="display:block;margin-top:6px">TinkerTailor.ca · CMozMaker · merry making in Canada</span>` }
+};
+function applyTheme(name){
+  const t = THEMES[name] || THEMES.default;
+  if(name==="default") document.documentElement.removeAttribute("data-season");
+  else document.documentElement.setAttribute("data-season", name);
+  document.querySelectorAll(".season-pick button").forEach(b=>
+    b.setAttribute("aria-pressed", b.dataset.season===name));
+  $("tagline").innerHTML = t.tagline;
+  // apply the themed preset to the simulator + controls
+  applyEffect(t.fx);
+  sim.fxColor = t.color;
+  $("color-pick").value = "#"+t.color.toString(16).toUpperCase().padStart(6,"0");
+  document.querySelectorAll(".sw").forEach(s=>s.setAttribute("aria-pressed",false));
+  sim.budgetmA = t.budget; $("budget").value = t.budget; $("budget-out").value = t.budget+" mA";
+  $("gauge-max").textContent = t.budget+" mA budget";
+  sim.brightness = t.bright; $("bright").value = t.bright; $("bright-out").value = t.bright;
+  writeSketch();
+  // shareable URL without reloading
+  const u = new URL(location.href);
+  if(name==="default") u.searchParams.delete("theme"); else u.searchParams.set("theme", name);
+  history.replaceState(null,"",u);
+}
+document.querySelectorAll(".season-pick button").forEach(b=>
+  b.onclick=()=>applyTheme(b.dataset.season));
+
+/* boot */
+const startTheme = new URLSearchParams(location.search).get("theme");
+applyEffect(8);
+validatePin();
+if(startTheme && THEMES[startTheme]) applyTheme(startTheme);
+else writeSketch();
+render();
+</script>
+</body>
+</html>
