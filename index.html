@@ -426,13 +426,21 @@ same error messages. Twenty pixels, zero soldering. <span class="eyebrow" style=
   <h2>Ten effects from the atelier</h2>
   <p class="lede">Named for fabric, runways and northern skies — not test patterns. Click any card to run it in the simulator.</p>
   <div class="fx-grid" id="fx-gallery"></div>
+
+  <div style="margin-top:40px">
+    <p class="eyebrow">plus four for the holidays</p>
+    <h3 style="font-family:var(--disp);font-weight:600;font-size:clamp(20px,2.4vw,26px);margin:6px 0 8px">
+      Seasonal effects — because your strip can't read a calendar</h3>
+    <p class="lede" style="margin-bottom:20px">Built for Halloween and Christmas, but far too much fun to pack away in January. Run them whenever — or hit the 🎃 and 🎄 themes up top to see them all dressed up.</p>
+    <div class="fx-grid" id="fx-gallery-seasonal"></div>
+  </div>
 </section>
 
 <!-- ═══════════════ ERROR PLAYGROUND ═══════════════ -->
 <section id="errors" class="reveal">
   <p class="eyebrow">interactive</p>
   <h2>The error playground</h2>
-  <p class="lede">Make real mistakes, get the library's real answers — the exact strings compiled into v1.1.0. Turn on the status pixel first and watch pixel 0 go red.</p>
+  <p class="lede">Make real mistakes, get the library's real answers — the exact strings compiled into v1.3.0. Turn on the status pixel first and watch pixel 0 go red.</p>
   <div class="err-grid">
     <div>
       <button class="err-btn" data-err="index">glow.setPixel(<span style="color:var(--bad)">999</span>, 255,0,0);</button>
@@ -520,7 +528,7 @@ CMozGlow glow(numLeds, pin);       <span class="c">// or any valid ESP32-S3 outp
 
 <footer>
   <div>Made with 💛 in Canada · <b>TinkerTailor.ca</b> — components &amp; conductive fabrics</div>
-  <div>Tutorials on <b>CMozMaker</b> · MIT licensed · CMozGlow v1.1.0</div>
+  <div>Tutorials on <b>CMozMaker</b> · MIT licensed · CMozGlow v1.3.0</div>
 </footer>
 
 <div class="toast" id="toast">Copied!</div>
@@ -977,7 +985,7 @@ function render(){
    ════════════════════════════════════════════════════════════════ */
 const $=id=>document.getElementById(id);
 const SWATCHES=["#FF2A78","#FFB300","#00C8A0","#0A90FF","#9B5CFF","#FFFFFF"];
-const chipsEl=$("fx-chips"), galleryEl=$("fx-gallery");
+const chipsEl=$("fx-chips"), galleryEl=$("fx-gallery"), gallerySeasonalEl=$("fx-gallery-seasonal");
 const FX_GRAD=["linear-gradient(90deg,#FF2A78,#FF2A78)",
  "linear-gradient(90deg,#332,#fff 30%,#332 34%,#332 60%,#fff 64%,#332)",
  "linear-gradient(90deg,transparent,#FF2A78 45%,#fff 50%,#FF2A78 55%,transparent)",
@@ -1026,7 +1034,7 @@ FX_META.forEach(([name,desc],i)=>{
   card.innerHTML=`<div class="strip" style="background:${FX_GRAD[i]}"></div>
     <h4><span>${String(i).padStart(2,"0")}</span>${name}</h4><p>${desc}</p><span class="try">run it ↑</span>`;
   card.onclick=()=>{applyEffect(i); $("stage-wrap").scrollIntoView({behavior:"smooth",block:"center"});};
-  galleryEl.appendChild(card);
+  (i < 10 ? galleryEl : gallerySeasonalEl).appendChild(card);  // 0-9 atelier, 10-13 seasonal
 });
 
 // "show all effects" toggle — only visible in a season (featureSeason controls it)
