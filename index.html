@@ -457,12 +457,13 @@ same error messages. Twenty pixels, zero soldering. <span class="eyebrow" style=
 <section class="reveal">
   <p class="eyebrow">hardware</p>
   <h2>Wiring in one breath</h2>
-  <div class="golden">🧵 <b>The golden rule:</b> your board's onboard pixel lives on GPIO 3 and is <b>pixel 0</b>.
-    Attach your strip's DIN to GPIO 3 too — it continues as pixel 1 onward. So <b>NUM_LEDS = 1 + strip length</b>.</div>
+  <div class="golden">🧵 <b>The golden rule (CMoz board):</b> the CMoz ESP32-S3 Mini's onboard pixel lives on GPIO 3 and is <b>pixel 0</b>.
+    Attach your strip's DIN to GPIO 3 too — it continues as pixel 1 onward. So <b>NUM_LEDS = 1 + strip length</b>.
+    <span style="display:block;margin-top:8px;color:var(--thread);font-size:13px">CMoz ESP32-S3 Mini launching 2027 (date TBC). On other boards there's no onboard pixel, so <b>NUM_LEDS</b> is simply your strip length.</span></div>
   <div class="wire">CMoz ESP32-S3 Mini                    WS2812B strip
 ┌───────────────┐
 │  <b>[pixel 0]</b>    │   GPIO 3 ───────▶  DIN → ● ● ● ● ● … (pixels 1…n)
-│   onboard      │   GND    ───────▶  GND
+│   onboard     │   GND    ───────▶  GND
 └───────────────┘   5V from a supply that matches your power budget
 
 Long run? Add 300–500 Ω in the data line + 500–1000 µF across power.
