@@ -2,7 +2,7 @@
 Code & libraries to support the new range of boards CMoz Designed by Pegg Engineering. 
 Most of these builds have videos on my YouTube channel [CMozMaker](https://www.youtube.com/@CMozMaker)
 
---> Web page that writes your Glow code for you! [https://github.com/cmoz/CMozESP32Board/deployments/github-pages](https://cmoz.github.io/CMozESP32Board/)
+--> Web page that writes your Glow code for you: [tinkertailor.ca/pages/cmozglow](https://www.tinkertailor.ca/pages/cmozglow)
 
 # ✨ CMozGlow
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/cmoz/library/CMozGlow.svg)](https://registry.platformio.org/libraries/cmoz/CMozGlow)
